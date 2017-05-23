@@ -136,3 +136,29 @@ func Test_ResponseWriter_Hijack(t *testing.T) {
 		So(hijackable.Hijacked, ShouldBeTrue)
 	})
 }
+
+func Test_GzipPanic(t *testing.T) {
+	Convey("Gzip response content", t, func() {
+		before := false
+
+		m := macaron.Classic()
+		m.Use(Gziper())
+		m.Use(func(r http.ResponseWriter) {
+			r.(macaron.ResponseWriter).Before(func(rw macaron.ResponseWriter) {
+				before = true
+			})
+		})
+		m.Get("/", func(ctx *macaron.Context) { panic("test") })
+
+		// Gzip now.
+		resp := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/", nil)
+		req.Header.Set(_HEADER_ACCEPT_ENCODING, "gzip")
+		m.ServeHTTP(resp, req)
+		_, ok := resp.HeaderMap[_HEADER_CONTENT_ENCODING]
+		So(ok, ShouldBeFalse)
+
+		So(resp.Body.String(), ShouldContainSubstring, "PANIC: test")
+		So(before, ShouldBeTrue)
+	})
+}
